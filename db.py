@@ -1,9 +1,6 @@
 import os
 import sqlite3
 
-from psycopg import connect
-from psycopg.rows import dict_row
-
 
 SQLITE_DB_PATH = "hebrew_vocab.db"
 
@@ -58,6 +55,9 @@ def get_connection():
     database_type = get_database_type()
 
     if database_type == "postgresql":
+        from psycopg import connect
+        from psycopg.rows import dict_row
+
         conn = connect(
             os.environ["DATABASE_URL"],
             row_factory=dict_row
@@ -69,6 +69,31 @@ def get_connection():
     conn.row_factory = sqlite3.Row
 
     return ConnectionAdapter(conn, "sqlite")
+
+
+def column_exists(cur, table_name, column_name, database_type):
+    if database_type == "postgresql":
+        cur.execute(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_name = %s
+              AND column_name = %s
+            """,
+            (table_name, column_name)
+        )
+    else:
+        cur.execute(f"PRAGMA table_info({table_name})")
+        return any(column["name"] == column_name for column in cur.fetchall())
+
+    return cur.fetchone() is not None
+
+
+def ensure_column(cur, table_name, column_name, definition, database_type):
+    if not column_exists(cur, table_name, column_name, database_type):
+        cur.execute(
+            f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}"
+        )
 
 
 def initialize_database():
@@ -96,10 +121,12 @@ def initialize_database():
             transliteration TEXT,
             part_of_speech TEXT,
             english_meaning TEXT NOT NULL,
+            japanese_meaning TEXT,
             example_hebrew TEXT,
             example_english TEXT,
             notes TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE (hebrew, english_meaning)
         )
         """)
@@ -130,6 +157,15 @@ def initialize_database():
         )
         """)
 
+        ensure_column(cur, "words", "japanese_meaning", "TEXT", database_type)
+        ensure_column(
+            cur,
+            "words",
+            "updated_at",
+            "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            database_type
+        )
+
     else:
         cur.execute("""
         CREATE TABLE IF NOT EXISTS folders (
@@ -149,10 +185,12 @@ def initialize_database():
             transliteration TEXT,
             part_of_speech TEXT,
             english_meaning TEXT NOT NULL,
+            japanese_meaning TEXT,
             example_hebrew TEXT,
             example_english TEXT,
             notes TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             UNIQUE (hebrew, english_meaning)
         )
         """)
@@ -182,6 +220,15 @@ def initialize_database():
             FOREIGN KEY (folder_id) REFERENCES folders(id)
         )
         """)
+
+        ensure_column(cur, "words", "japanese_meaning", "TEXT", database_type)
+        ensure_column(
+            cur,
+            "words",
+            "updated_at",
+            "TEXT DEFAULT CURRENT_TIMESTAMP",
+            database_type
+        )
 
     conn.commit()
     conn.close()
