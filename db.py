@@ -96,6 +96,35 @@ def ensure_column(cur, table_name, column_name, definition, database_type):
         )
 
 
+def ensure_sqlite_column(cur, table_name, column_name, definition):
+    ensure_column(cur, table_name, column_name, definition, "sqlite")
+
+
+def backfill_words_timestamps(cur):
+    cur.execute("""
+        UPDATE words
+        SET created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+            updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP)
+        WHERE created_at IS NULL
+           OR updated_at IS NULL
+    """)
+
+
+def create_sqlite_word_timestamp_trigger(cur):
+    cur.execute("""
+        CREATE TRIGGER IF NOT EXISTS words_set_timestamps_after_insert
+        AFTER INSERT ON words
+        FOR EACH ROW
+        WHEN NEW.created_at IS NULL OR NEW.updated_at IS NULL
+        BEGIN
+            UPDATE words
+            SET created_at = COALESCE(NEW.created_at, CURRENT_TIMESTAMP),
+                updated_at = COALESCE(NEW.updated_at, NEW.created_at, CURRENT_TIMESTAMP)
+            WHERE id = NEW.id;
+        END
+    """)
+
+
 def initialize_database():
     conn = get_connection()
     cur = conn.cursor()
@@ -161,10 +190,24 @@ def initialize_database():
         ensure_column(
             cur,
             "words",
+            "created_at",
+            "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            database_type
+        )
+        ensure_column(
+            cur,
+            "words",
             "updated_at",
             "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
             database_type
         )
+        cur.execute("""
+            UPDATE words
+            SET created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+                updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP)
+            WHERE created_at IS NULL
+               OR updated_at IS NULL
+        """)
 
     else:
         cur.execute("""
@@ -221,14 +264,11 @@ def initialize_database():
         )
         """)
 
-        ensure_column(cur, "words", "japanese_meaning", "TEXT", database_type)
-        ensure_column(
-            cur,
-            "words",
-            "updated_at",
-            "TEXT DEFAULT CURRENT_TIMESTAMP",
-            database_type
-        )
+        ensure_sqlite_column(cur, "words", "japanese_meaning", "TEXT")
+        ensure_sqlite_column(cur, "words", "created_at", "TEXT")
+        ensure_sqlite_column(cur, "words", "updated_at", "TEXT")
+        backfill_words_timestamps(cur)
+        create_sqlite_word_timestamp_trigger(cur)
 
     conn.commit()
     conn.close()

@@ -144,9 +144,13 @@ def create_word(folder_id, form_data):
             example_hebrew,
             example_english,
             notes,
+            created_at,
             updated_at
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+        VALUES (
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        )
         """,
         (
             form_data["hebrew"],
