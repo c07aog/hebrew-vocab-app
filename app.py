@@ -47,7 +47,7 @@ def get_words_in_folder(folder_id):
         FROM words
         JOIN folder_words
             ON words.id = folder_words.word_id
-        WHERE folder_words.folder_id = ?
+        WHERE folder_words.folder_id = %s
         ORDER BY words.id
     """, (folder_id,))
 
@@ -68,7 +68,7 @@ def save_review(word_id, folder_id, result):
             mode,
             result
         )
-        VALUES (?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s)
     """, (
         word_id,
         folder_id,

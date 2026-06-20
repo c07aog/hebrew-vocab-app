@@ -6,7 +6,7 @@ def get_or_create_folder(cur, name, description):
         """
         SELECT id
         FROM folders
-        WHERE name = ?
+        WHERE name = %s
         """,
         (name,)
     )
@@ -19,12 +19,21 @@ def get_or_create_folder(cur, name, description):
     cur.execute(
         """
         INSERT INTO folders (name, description)
-        VALUES (?, ?)
+        VALUES (%s, %s)
         """,
         (name, description)
     )
 
-    return cur.lastrowid
+    cur.execute(
+        """
+        SELECT id
+        FROM folders
+        WHERE name = %s
+        """,
+        (name,)
+    )
+
+    return cur.fetchone()["id"]
 
 
 def get_or_create_word(cur, word):
@@ -32,8 +41,8 @@ def get_or_create_word(cur, word):
         """
         SELECT id
         FROM words
-        WHERE hebrew = ?
-          AND english_meaning = ?
+        WHERE hebrew = %s
+          AND english_meaning = %s
         """,
         (
             word["hebrew"],
@@ -58,7 +67,7 @@ def get_or_create_word(cur, word):
             example_hebrew,
             example_english
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             word["hebrew"],
@@ -72,7 +81,20 @@ def get_or_create_word(cur, word):
         )
     )
 
-    return cur.lastrowid
+    cur.execute(
+        """
+        SELECT id
+        FROM words
+        WHERE hebrew = %s
+          AND english_meaning = %s
+        """,
+        (
+            word["hebrew"],
+            word["english_meaning"]
+        )
+    )
+
+    return cur.fetchone()["id"]
 
 
 def seed_data():
@@ -145,8 +167,9 @@ def seed_data():
 
         cur.execute(
             """
-            INSERT OR IGNORE INTO folder_words (folder_id, word_id)
-            VALUES (?, ?)
+            INSERT INTO folder_words (folder_id, word_id)
+            VALUES (%s, %s)
+            ON CONFLICT(folder_id, word_id) DO NOTHING
             """,
             (folder_id, word_id)
         )
@@ -155,8 +178,6 @@ def seed_data():
     conn.close()
 
     print("初期データを登録しました。")
-    print("フォルダ: 初級ヘブライ語")
-    print("単語数: 5")
 
 
 if __name__ == "__main__":
